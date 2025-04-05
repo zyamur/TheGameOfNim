@@ -5,6 +5,7 @@ import json
 import random
 
 class NimServer:
+    
     def __init__(self, port, piles):
         self.host = '0.0.0.0'
         self.port = port
@@ -14,6 +15,7 @@ class NimServer:
         self.current_turn = None
         self.lock = threading.Lock()
 
+    #Serverı başlat ve gelen bağlantıları dinle
     def start_server(self):
         self.server_socket.bind((self.host, self.port))
         self.server_socket.listen(2)
@@ -30,8 +32,15 @@ class NimServer:
         print(f"Game started with piles: {self.piles}")
         self.broadcast({"type": "start", "piles": self.piles, "turn": self.current_turn})
 
+        threading.Event().wait()
+
+    #Her bir client için ayrı bir thread oluştur ve gelen mesajları yönet
     def handle_client(self, conn, player_id):
-        conn.sendall(json.dumps({"type": "id", "id": player_id}).encode())
+        try:
+            conn.sendall(json.dumps({"type": "id", "id": player_id}).encode())
+        except:
+            print(f"Failed to send ID to player {player_id}")
+            return
 
         while True:
             try:
@@ -50,14 +59,19 @@ class NimServer:
 
         conn.close()
 
+    # Clientın oyun durumunu alması için gerekli bilgileri gönder
     def send_state(self, conn, player_id):
         turn_msg = "Your turn!" if self.current_turn == player_id else f"Player {self.current_turn}'s turn."
-        conn.sendall(json.dumps({
-            "type": "state",
-            "piles": self.piles,
-            "turn_msg": turn_msg
-        }).encode())
+        try:
+            conn.sendall(json.dumps({
+                "type": "state",
+                "piles": self.piles,
+                "turn_msg": turn_msg
+            }).encode())
+        except Exception as e:
+            print(f"Failed to send state to player {player_id}: {e}")
 
+    #Clienttan gelen hamleleri işle
     def process_move(self, player_id, pile, count):
         with self.lock:
             if self.current_turn != player_id:
@@ -76,22 +90,27 @@ class NimServer:
             print(f"Player {player_id} removed {count} from pile {pile}. Piles: {self.piles}")
 
             if all(p == 0 for p in self.piles):
+                print(f"Player {player_id} has won the game!")
                 self.broadcast({"type": "win", "winner": player_id})
                 return
 
             self.current_turn = 1 - self.current_turn
+            print(f"Waiting for Player {self.current_turn}'s move")
             self.broadcast({"type": "update", "piles": self.piles, "turn": self.current_turn})
 
     def send_to(self, player_id, message):
-        conn, _ = self.clients[player_id]
-        conn.sendall(json.dumps(message).encode())
+        try:
+            conn, _ = self.clients[player_id]
+            conn.sendall(json.dumps(message).encode())
+        except Exception as e:
+            print(f"Failed to send to player {player_id}: {e}")
 
     def broadcast(self, message):
         for conn, _ in self.clients:
             try:
                 conn.sendall(json.dumps(message).encode())
-            except:
-                continue
+            except Exception as e:
+                print("Broadcast error:", e)
 
 
 if __name__ == '__main__':

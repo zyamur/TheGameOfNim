@@ -15,16 +15,15 @@ class NimClient:
         self.client_socket.connect((self.server_ip, self.port))
         print("Connected to server.")
 
-        # Receive player ID
+        #Sunucudan gelen ID mesajını al ve oyuncu ID'sini ata
         id_msg = json.loads(self.client_socket.recv(1024).decode())
         if id_msg['type'] == 'id':
             self.player_id = id_msg['id']
             print(f"Your player ID is {self.player_id}.")
 
-        # Start receiving messages
+        #Serverdan gelen mesajları dinle
         threading.Thread(target=self.listen_to_server, daemon=True).start()
 
-        # Main input loop
         while self.running:
             user_input = input()
             if user_input.lower() == 'state':
@@ -52,6 +51,7 @@ class NimClient:
         self.running = False
         self.client_socket.close()
 
+    #Serverdan gelen mesajları yönet ve işleme al
     def handle_message(self, msg):
         msg_type = msg.get("type")
 
@@ -78,7 +78,7 @@ class NimClient:
 
         elif msg_type == "win":
             if msg["winner"] == self.player_id:
-                print("🎉 You won! 🎉")
+                print("You won! Congratulations!")
             else:
                 print("You lost. Better luck next time!")
             self.running = False
@@ -89,6 +89,7 @@ class NimClient:
         except:
             print("Failed to send message to server.")
 
+    #Oyunun pile durumunu ekrana yazdır
     def print_piles(self, piles):
         print("Current pile state:")
         for i, count in enumerate(piles):
